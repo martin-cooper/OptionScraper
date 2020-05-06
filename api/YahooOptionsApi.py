@@ -83,6 +83,7 @@ class ContractData:
             expiry: {self.date}
             strike: {self.strike}
             type: {self.contractType}
+	    data: {self.data}
         }}
         '''
 
