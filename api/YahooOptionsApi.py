@@ -25,7 +25,7 @@ CONTRACT_REGEX = '([A-z]+)([0-9]+)([C|P])([0-9]+)'
 
 
 class DataGranularityPayload(Enum):
-    INTRADAY = 'day'
+    INTRADAY = 'intraday'
     DAY = 'day'
 
 
@@ -71,7 +71,7 @@ class ContractData:
 
             contractType = OptionType.CALL if contractName.group(3) == 'C' else OptionType.PUT
             strikeRaw = contractName.group(4)
-            strikeConverted = float(f'{strikeRaw[:-2]}.{strikeRaw[-2:]}')
+            strikeConverted = float(f'{strikeRaw[:-3]}.{strikeRaw[-3:]}')
 
         return ticker, contractDateObj, contractType, strikeConverted
 

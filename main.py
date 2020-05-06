@@ -10,4 +10,4 @@ dates = chain.getDates()
 callContracts, putContracts = chain.getContractNames()
 
 optionData = YahooOptionsApi()
-pprint.pprint(optionData.execute(callContracts, DataGranularityPayload.DAY))
+(optionData.execute(callContracts, DataGranularityPayload.INTRADAY))
