@@ -3,7 +3,8 @@ from typing import List
 from dataclasses import dataclass
 from enum import Enum
 
-from datetime import date, datetime
+from datetime import date
+from urllib3.exceptions import HTTPError
 import requests
 import time
 
@@ -83,7 +84,7 @@ class ContractData:
             expiry: {self.date}
             strike: {self.strike}
             type: {self.contractType}
-	    data: {self.data}
+            data: {self.data}
         }}
         '''
 
@@ -93,17 +94,26 @@ class YahooOptionsApi:
         self.session = requests.Session()
         self.session.headers = headers
 
-    def execute(self, contractNames: List[str], dataRange: DataGranularityPayload):
-        optionData = [self.getTickerData(contract, dataRange) for contract in contractNames]
+    def execute(self, contractNames: List[str], dataRange: DataGranularityPayload) -> List[ContractData]:
+        optionData = []
+        for (count, contract) in enumerate(contractNames):
+            try:
+                tickerData = self.getTickerData(contract, dataRange)
+                optionData.append(tickerData)
+            except HTTPError as err:
+                print(err.args)
+
         return optionData
 
     def getTickerData(self, contractName: str, dataRange: DataGranularityPayload) -> ContractData:
         rangePayload = mapGranularityToPayload(dataRange)
         request = self.session.get(BASE_URL + contractName, params=rangePayload)
         data = request.json()
+        if request.status_code != 200:
+            raise HTTPError(f'Response code:{request.status_code}', request.url, request.reason, contractName)
         formattedData = ContractData(contractName, data['chart']['result'][0]['indicators'])
         # will likely run into issues without sleep
-        time.sleep(0.05)
+        time.sleep(0.25)
         return formattedData
 
 

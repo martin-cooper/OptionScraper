@@ -1,3 +1,4 @@
+import time
 from typing import Tuple, List
 
 from bs4 import BeautifulSoup
@@ -20,6 +21,11 @@ headers = {
 }
 
 
+class ChainError(Exception):
+    def __init__(self, errType):
+        self.errType = errType
+
+
 class ChainScanner:
     def __init__(self):
         session = requests.Session()
@@ -27,14 +33,19 @@ class ChainScanner:
         self.session = session
         self.soup: BeautifulSoup = None
 
-    def loadPage(self, ticker) -> None:
+    def loadPage(self, ticker, date=None) -> None:
         url = f'{BASE_URL}/{ticker}/options'
-        page: Response = self.session.get(url)
+        startLoad = time.time()
+        print(f'Loading chain for ticker {ticker} and date {date}')
+        page: Response = self.session.get(url) if not date else self.session.request('GET', url, {'date': date})
+        print(f'Chain loaded for {ticker} in {time.time() - startLoad}')
         self.soup: BeautifulSoup = BeautifulSoup(page.content, 'lxml')
 
     def getContractNames(self) -> Tuple[List[str], List[str]]:
         tables = self.soup.find_all('table')
         pandaTables: List[List[pd.DataFrame]] = [pd.read_html(str(table)) for table in tables]
+        if len(pandaTables) != 2:
+            raise ChainError('Missing either put or call chain')
         callTable: pd.DataFrame = pandaTables[0][0]
         callContractNames = callTable['Contract Name'].to_list()
 
@@ -46,7 +57,6 @@ class ChainScanner:
     def getDates(self):
         dates = self.soup.find_all('select', {'class': 'Fz(s)'})
         datesSelector = dates[0].contents
-        datesAsSeconds = [date.attrs['value'] for date in datesSelector]
+        datesAsSeconds = [int(date.attrs['value']) for date in datesSelector]
         return datesAsSeconds
-        
 
