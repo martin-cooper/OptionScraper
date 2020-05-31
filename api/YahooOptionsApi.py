@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from dataclasses import dataclass
@@ -5,12 +6,14 @@ from enum import Enum
 
 from datetime import date
 from urllib3.exceptions import HTTPError
+from requests.exceptions import ConnectionError
 import requests
 import time
 
 import re
 
 BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/'
+logging.basicConfig(level=logging.INFO)
 
 headers = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
@@ -23,7 +26,7 @@ headers = {
 }
 
 CONTRACT_REGEX = '([A-z]+)([0-9]+)([C|P])([0-9]+)'
-
+MAX_RETRIES = 5
 
 class DataGranularityPayload(Enum):
     INTRADAY = 'intraday'
@@ -77,44 +80,49 @@ class ContractData:
         return ticker, contractDateObj, contractType, strikeConverted
 
     def __repr__(self):
-        return f'''
-        {{
-            contract name: {self.contractName}
-            ticker: {self.ticker}
-            expiry: {self.date}
-            strike: {self.strike}
-            type: {self.contractType}
-            data: {self.data}
-        }}
-        '''
+        return str(self.__dict__)
 
 
 class YahooOptionsApi:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers = headers
+        adapter = requests.adapters.HTTPAdapter(max_retries=5)
+        self.session.mount('https://', adapter)
 
     def execute(self, contractNames: List[str], dataRange: DataGranularityPayload) -> List[ContractData]:
-        optionData = []
-        for (count, contract) in enumerate(contractNames):
+        tickerData = []
+        logging.info(f'Processing bundle starting with {contractNames[0]} and ending with {contractNames[-1]} with '
+                     f'length {len(contractNames)}')
+        elapsedTimes = []
+        for contractName in contractNames:
             try:
-                tickerData = self.getTickerData(contract, dataRange)
-                optionData.append(tickerData)
+                contractData, timeElapsed = self.getTickerData(contractName, dataRange)
+                tickerData.append(contractData)
+                elapsedTimes.append(timeElapsed)
+                time.sleep(1)
             except HTTPError as err:
-                print(err.args)
+                logging.error(err.args)
+        logging.info(f'Bundle starting with {contractNames[0]} and ending with {contractNames[-1]} took an '
+                     f'average of {sum(elapsedTimes) / len(elapsedTimes)}s per request')
+        return tickerData
 
-        return optionData
-
-    def getTickerData(self, contractName: str, dataRange: DataGranularityPayload) -> ContractData:
+    def getTickerData(self, contractName: str, dataRange: DataGranularityPayload, retries=0) -> ContractData:
         rangePayload = mapGranularityToPayload(dataRange)
-        request = self.session.get(BASE_URL + contractName, params=rangePayload)
+        try:
+            request = self.session.get(BASE_URL + contractName, params=rangePayload)
+        except ConnectionError as e:
+            logging.error(f'Connection error: for contract {contractName} {e.args}')
+            if retries == MAX_RETRIES:
+                raise e
+            time.sleep(30)
+            return self.getTickerData(contractName, dataRange, retries+1)
         data = request.json()
         if request.status_code != 200:
             raise HTTPError(f'Response code:{request.status_code}', request.url, request.reason, contractName)
         formattedData = ContractData(contractName, data['chart']['result'][0]['indicators'])
         # will likely run into issues without sleep
-        time.sleep(0.25)
-        return formattedData
+        return formattedData, request.elapsed.total_seconds()
 
 
 def mapGranularityToPayload(dataRange: DataGranularityPayload):

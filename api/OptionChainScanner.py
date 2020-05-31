@@ -1,4 +1,7 @@
 import time
+import logging
+
+from datetime import date
 from typing import Tuple, List
 
 from bs4 import BeautifulSoup
@@ -16,8 +19,8 @@ headers = {
     'Cache-Control': 'max-age=0',
     'Pragma': 'no-cache',
     'Referrer': 'https://google.com',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-                  'Chrome/77.0.3865.120 Safari/537.36 '
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) '
+                  'Chrome/83.0.4103.61 Safari/537.36'
 }
 
 
@@ -33,12 +36,14 @@ class ChainScanner:
         self.session = session
         self.soup: BeautifulSoup = None
 
-    def loadPage(self, ticker, date=None) -> None:
+    def loadPage(self, ticker, expiry=None) -> None:
         url = f'{BASE_URL}/{ticker}/options'
         startLoad = time.time()
-        print(f'Loading chain for ticker {ticker} and date {date}')
-        page: Response = self.session.get(url) if not date else self.session.request('GET', url, {'date': date})
-        print(f'Chain loaded for {ticker} in {time.time() - startLoad}')
+        logging.info(f'Loading chain for ticker {ticker} and date {date.fromtimestamp(expiry) if expiry else None}')
+        page: Response = self.session.get(url) if not expiry \
+            else self.session.request('GET', url, {'date': expiry})
+        logging.info(f'Chain loaded for {ticker} with date {date.fromtimestamp(expiry) if expiry else None}'
+                     f' in {time.time() - startLoad} seconds')
         self.soup: BeautifulSoup = BeautifulSoup(page.content, 'lxml')
 
     def getContractNames(self) -> Tuple[List[str], List[str]]:
@@ -53,10 +58,9 @@ class ChainScanner:
         putContractNames = putTable['Contract Name'].to_list()
 
         return callContractNames, putContractNames
-    
+
     def getDates(self):
         dates = self.soup.find_all('select', {'class': 'Fz(s)'})
         datesSelector = dates[0].contents
-        datesAsSeconds = [int(date.attrs['value']) for date in datesSelector]
+        datesAsSeconds = [int(timeStamp.attrs['value']) for timeStamp in datesSelector]
         return datesAsSeconds
-
