@@ -4,13 +4,12 @@ from typing import List
 from dataclasses import dataclass
 from enum import Enum
 
-from datetime import date
 from urllib3.exceptions import HTTPError
 from requests.exceptions import ConnectionError
 import requests
 import time
 
-import re
+from utilities.contractUtilities import parseContractName
 
 BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/'
 logging.basicConfig(level=logging.INFO)
@@ -28,14 +27,10 @@ headers = {
 CONTRACT_REGEX = '([A-z]+)([0-9]+)([C|P])([0-9]+)'
 MAX_RETRIES = 5
 
+
 class DataGranularityPayload(Enum):
     INTRADAY = 'intraday'
     DAY = 'day'
-
-
-class OptionType(Enum):
-    CALL = 'call'
-    PUT = 'put'
 
 
 @dataclass(repr=True)
@@ -50,7 +45,7 @@ class YahooOptionDatum:
 class ContractData:
     def __init__(self, contractName, indicators):
         self.contractName = contractName
-        self.ticker, self.date, self.contractType, self.strike = self.parseContractName(contractName)
+        self.ticker, self.date, self.contractType, self.strike = parseContractName(contractName)
         quote = indicators['quote'][0]
         self.data: List[YahooOptionDatum] = [
             YahooOptionDatum(datum,
@@ -60,24 +55,6 @@ class ContractData:
                              quote['volume'][count],
                              )
             for (count, datum) in enumerate(quote.get('high', []))]
-
-    @staticmethod
-    def parseContractName(contractName):
-        contractName = re.search(CONTRACT_REGEX, contractName)
-        if contractName:
-            ticker = contractName.group(1)
-
-            contractDateRaw = contractName.group(2)
-            contractYear = int(contractDateRaw[:2]) + 2000
-            contractMonth = int(contractDateRaw[2:4])
-            contractDay = int(contractDateRaw[4:])
-            contractDateObj = date(contractYear, contractMonth, contractDay)
-
-            contractType = OptionType.CALL if contractName.group(3) == 'C' else OptionType.PUT
-            strikeRaw = contractName.group(4)
-            strikeConverted = float(f'{strikeRaw[:-3]}.{strikeRaw[-3:]}')
-
-        return ticker, contractDateObj, contractType, strikeConverted
 
     def __repr__(self):
         return str(self.__dict__)

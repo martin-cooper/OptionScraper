@@ -139,3 +139,4 @@ cython_debug/
 
 # IDE files
 .idea
+contractStore.json

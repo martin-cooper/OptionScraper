@@ -1,11 +1,11 @@
-import time, random
-import logging
-
 import concurrent.futures
+import logging
+import random
+import time
 from typing import List, Dict
 
-from api.YahooOptionsApi import YahooOptionsApi, DataGranularityPayload
-from api.OptionChainScanner import ChainScanner, ChainError
+from api.yahooOptionsApi import YahooOptionsApi, DataGranularityPayload
+from dataProcessing import optionChainProcessor
 
 logging.basicConfig(level=logging.ERROR)
 NASDAQ = "ATVI,ADBE,AMD,ALXN,ALGN,GOOG,GOOGL,AMZN,AMGN,ADI,ANSS,AAPL,AMAT,ASML,ADSK,ADP,BIDU,BIIB,BMRN,BKNG,AVGO," \
@@ -14,35 +14,6 @@ NASDAQ = "ATVI,ADBE,AMD,ALXN,ALGN,GOOG,GOOGL,AMZN,AMGN,ADI,ANSS,AAPL,AMAT,ASML,A
          "MDLZ,MNST,NTAP,NTES,NFLX,NVDA,NXPI,ORLY,PCAR,PAYX,PYPL,PEP,QCOM,REGN,ROST,SGEN,SIRI,SWKS,SPLK,SBUX,SNPS," \
          "TMUS,TTWO,TSLA,TXN,KHC,TCOM,ULTA,UAL,VRSN,VRSK,VRTX,WBA,WDC,WDAY,XEL,XLNX,ZM"
 CONTRACT_NAME_SIZE = 200
-
-
-def scrapeTicker(ticker: str):
-    chain = ChainScanner()
-    chain.loadPage(ticker)
-    try:
-        dates = chain.getDates()
-    except IndexError:
-        logging.error(f'Symbol {ticker} has no option chain')
-        return {'calls': [], 'puts': []}
-    time.sleep(1)
-    calls, puts = [], []
-    for date in dates:
-        chain.loadPage(ticker, date)
-        try:
-            callContracts, putContracts = chain.getContractNames()
-            calls.extend(callContracts)
-            puts.extend(putContracts)
-        except ChainError as err:
-            logging.error(f'{ticker} chain error: {err.errType}')
-    return {'calls': calls, 'puts': puts}
-
-
-def getContractMetaData():
-    logging.info('Retrieving contract names')
-    THREADS = 4
-    with concurrent.futures.ThreadPoolExecutor(max_workers=THREADS) as executor:
-        result = [res for res in executor.map(scrapeTicker, NASDAQ.split(','))]
-        return result
 
 
 def chunkList(data: List, chunkSize: int) -> List[List]:
@@ -75,9 +46,7 @@ def getContractPricingData(contractNames: List[Dict[str, str]]):
 def main():
     logging.info('Starting program')
     startTime = time.time()
-    contractNameData = getContractMetaData()
-    logging.info('Loaded contract names')
-    data = getContractPricingData(contractNameData)
+    (optionChainProcessor.getContractMetaData(NASDAQ, loadNewData=False))
     logging.info(f'Process finished in {time.time() - startTime} seconds')
 
 
