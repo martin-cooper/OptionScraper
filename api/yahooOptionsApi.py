@@ -2,11 +2,11 @@ import logging
 from typing import List
 
 from dataclasses import dataclass
-from enum import Enum
 
 from urllib3.exceptions import HTTPError
 from requests.exceptions import ConnectionError
 import requests
+import datetime
 import time
 
 from utilities.contractUtilities import parseContractName
@@ -28,11 +28,6 @@ CONTRACT_REGEX = '([A-z]+)([0-9]+)([C|P])([0-9]+)'
 MAX_RETRIES = 5
 
 
-class DataGranularityPayload(Enum):
-    INTRADAY = 'intraday'
-    DAY = 'day'
-
-
 @dataclass(repr=True)
 class YahooOptionDatum:
     high: float
@@ -40,10 +35,11 @@ class YahooOptionDatum:
     open: float
     close: float
     volume: int
+    timestamp: int
 
 
 class ContractData:
-    def __init__(self, contractName, indicators):
+    def __init__(self, contractName, indicators, timestamps):
         self.contractName = contractName
         self.ticker, self.date, self.contractType, self.strike = parseContractName(contractName)
         quote = indicators['quote'][0]
@@ -53,6 +49,7 @@ class ContractData:
                              quote['open'][count],
                              quote['close'][count],
                              quote['volume'][count],
+                             timestamps[count]
                              )
             for (count, datum) in enumerate(quote.get('high', []))]
 
@@ -67,49 +64,49 @@ class YahooOptionsApi:
         adapter = requests.adapters.HTTPAdapter(max_retries=5)
         self.session.mount('https://', adapter)
 
-    def execute(self, contractNames: List[str], dataRange: DataGranularityPayload) -> List[ContractData]:
+    def execute(self, contractNames: List[str]) -> List[ContractData]:
         tickerData = []
         logging.info(f'Processing bundle starting with {contractNames[0]} and ending with {contractNames[-1]} with '
                      f'length {len(contractNames)}')
         elapsedTimes = []
         for contractName in contractNames:
             try:
-                contractData, timeElapsed = self.getTickerData(contractName, dataRange)
-                tickerData.append(contractData)
+                contractData, timeElapsed = self.getTickerData(contractName)
+                if contractData is not None:
+                    tickerData.append(contractData)
                 elapsedTimes.append(timeElapsed)
-                time.sleep(1)
+                time.sleep(0.5)
             except HTTPError as err:
                 logging.error(err.args)
         logging.info(f'Bundle starting with {contractNames[0]} and ending with {contractNames[-1]} took an '
                      f'average of {sum(elapsedTimes) / len(elapsedTimes)}s per request')
         return tickerData
 
-    def getTickerData(self, contractName: str, dataRange: DataGranularityPayload, retries=0) -> ContractData:
-        rangePayload = mapGranularityToPayload(dataRange)
+    def getTickerData(self, contractName: str, retries=0) -> ContractData:
+        params = getStartAndEndTimeStamps()
         try:
-            request = self.session.get(BASE_URL + contractName, params=rangePayload)
+            request = self.session.get(BASE_URL + contractName, params=params)
         except ConnectionError as e:
             logging.error(f'Connection error: for contract {contractName} {e.args}')
             if retries == MAX_RETRIES:
                 raise e
             time.sleep(30)
-            return self.getTickerData(contractName, dataRange, retries+1)
+            return self.getTickerData(contractName, retries+1)
         data = request.json()
         if request.status_code != 200:
             raise HTTPError(f'Response code:{request.status_code}', request.url, request.reason, contractName)
-        formattedData = ContractData(contractName, data['chart']['result'][0]['indicators'])
-        # will likely run into issues without sleep
+        result = data['chart']['result'][0]
+        if 'timestamp' not in result:
+            return None, request.elapsed.total_seconds()
+        formattedData = ContractData(contractName, result['indicators'], result['timestamp'])
         return formattedData, request.elapsed.total_seconds()
 
 
-def mapGranularityToPayload(dataRange: DataGranularityPayload):
-    if dataRange == DataGranularityPayload.DAY:
-        return {
-            'interval': '1d',
-            'range': '1d',
-        }
-    else:
-        return {
-            'interval': '1m',
-            'range': '1d',
-        }
+def getStartAndEndTimeStamps():
+    dayStart = datetime.datetime.combine(datetime.date.today(), datetime.time()).timestamp()
+    dayEnd = datetime.datetime.combine(datetime.date.today(), datetime.time(hour=23, minute=59)).timestamp()
+    return {
+        'period1': int(dayStart),
+        'period2': int(dayEnd),
+        'interval': '1m',
+    }

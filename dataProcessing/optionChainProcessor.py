@@ -1,25 +1,28 @@
 import concurrent
 import json
 import logging
-import os
 import datetime
+import time
 from typing import List, Dict
 
 from api.optionChainScanner import ChainScanner, ChainError
 from utilities import contractUtilities
 
-THREADS = 4
+THREADS = 200
 contractFileName = 'dataProcessing/contractStore.json'
 
 
-def retrieveAndCleanData() -> Dict[str, List]:
-    cleanedData = {}
+def retrieveAndCleanData() -> List[Dict[str, List[str]]]:
+    cleanedData = []
     with open(contractFileName, 'r') as contractFile:
         contractDataFile = json.load(contractFile)
     for expiryDate in contractDataFile.keys():
         convertedExpiry = datetime.datetime.strptime(expiryDate, '%Y-%m-%d')
         if datetime.datetime.today() <= convertedExpiry:
-            cleanedData[expiryDate] = contractDataFile[expiryDate]
+            cleanedData.append({
+                'calls': contractDataFile[expiryDate]['calls'],
+                'puts': contractDataFile[expiryDate]['puts'],
+            })
     return cleanedData
 
 
@@ -40,6 +43,7 @@ def scrapeTicker(ticker: str) -> Dict[str, List]:
             puts.extend(putContracts)
         except ChainError as err:
             logging.error(f'{ticker} chain error: {err.errType}')
+        time.sleep(1)
     return {'calls': calls, 'puts': puts}
 
 

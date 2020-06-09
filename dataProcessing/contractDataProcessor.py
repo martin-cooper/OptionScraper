@@ -2,32 +2,33 @@ import concurrent.futures
 import random
 from typing import List, Dict
 
-from api.yahooOptionsApi import YahooOptionsApi, DataGranularityPayload
+from api.yahooOptionsApi import YahooOptionsApi
 
-CONTRACT_NAME_SIZE = 200
+CONTRACT_NAME_SIZE = 100
 
 
 def chunkList(data: List, chunkSize: int) -> List[List]:
     return [data[i: i + chunkSize] for i in range(0, len(data), chunkSize)]
 
 
-def aggregateAndNormalizeContractNames(contractNames: List[Dict[str, str]]) -> List[List[str]]:
+def aggregateAndNormalizeContractNames(contractNames: List[Dict[str, List[str]]]) -> List[List[str]]:
     aggregated = []
     for contractList in contractNames:
         calls = contractList['calls']
         puts = contractList['puts']
         aggregated.extend(calls + puts)
     normalized = chunkList(aggregated, CONTRACT_NAME_SIZE)
-    return random.shuffle(normalized)
+    random.shuffle(normalized)
+    return normalized
 
 
 def queryData(contractNames: List[str]):
     yahoo = YahooOptionsApi()
-    return yahoo.execute(contractNames, DataGranularityPayload.INTRADAY)
+    return yahoo.execute(contractNames)
 
 
 def getContractPricingData(contractNames: List[Dict[str, str]]):
-    THREADS = 30
+    THREADS = 400
     contracts = aggregateAndNormalizeContractNames(contractNames)
     with concurrent.futures.ThreadPoolExecutor(max_workers=THREADS) as executor:
         result = [res for res in executor.map(queryData, contracts)]

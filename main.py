@@ -1,11 +1,9 @@
-import concurrent.futures
 import logging
-import random
-import time
-from typing import List, Dict
 
-from api.yahooOptionsApi import YahooOptionsApi, DataGranularityPayload
+import time
+
 from dataProcessing import optionChainProcessor
+from dataProcessing import contractDataProcessor
 
 logging.basicConfig(level=logging.ERROR)
 NASDAQ = "ATVI,ADBE,AMD,ALXN,ALGN,GOOG,GOOGL,AMZN,AMGN,ADI,ANSS,AAPL,AMAT,ASML,ADSK,ADP,BIDU,BIIB,BMRN,BKNG,AVGO," \
@@ -18,7 +16,8 @@ NASDAQ = "ATVI,ADBE,AMD,ALXN,ALGN,GOOG,GOOGL,AMZN,AMGN,ADI,ANSS,AAPL,AMAT,ASML,A
 def main():
     logging.info('Starting program')
     startTime = time.time()
-    (optionChainProcessor.getContractMetaData(NASDAQ, loadNewData=False))
+    contractNames = (optionChainProcessor.getContractMetaData(NASDAQ, loadNewData=False))
+    contractDataProcessor.getContractPricingData(contractNames)
     logging.info(f'Process finished in {time.time() - startTime} seconds')
 
 
