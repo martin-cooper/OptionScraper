@@ -1,15 +1,13 @@
 import logging
 from typing import List
 
-from dataclasses import dataclass
-
 from urllib3.exceptions import HTTPError
 from requests.exceptions import ConnectionError
 import requests
 import datetime
 import time
 
-from utilities.contractUtilities import parseContractName
+from data.contractData import ContractData
 
 BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/'
 logging.basicConfig(level=logging.INFO)
@@ -26,35 +24,6 @@ headers = {
 
 CONTRACT_REGEX = '([A-z]+)([0-9]+)([C|P])([0-9]+)'
 MAX_RETRIES = 5
-
-
-@dataclass(repr=True)
-class YahooOptionDatum:
-    high: float
-    low: float
-    open: float
-    close: float
-    volume: int
-    timestamp: int
-
-
-class ContractData:
-    def __init__(self, contractName, indicators, timestamps):
-        self.contractName = contractName
-        self.ticker, self.date, self.contractType, self.strike = parseContractName(contractName)
-        quote = indicators['quote'][0]
-        self.data: List[YahooOptionDatum] = [
-            YahooOptionDatum(datum,
-                             quote['low'][count],
-                             quote['open'][count],
-                             quote['close'][count],
-                             quote['volume'][count],
-                             timestamps[count]
-                             )
-            for (count, datum) in enumerate(quote.get('high', []))]
-
-    def __repr__(self):
-        return str(self.__dict__)
 
 
 class YahooOptionsApi:
@@ -75,7 +44,7 @@ class YahooOptionsApi:
                 if contractData is not None:
                     tickerData.append(contractData)
                 elapsedTimes.append(timeElapsed)
-                time.sleep(0.5)
+                time.sleep(1)
             except HTTPError as err:
                 logging.error(err.args)
         logging.info(f'Bundle starting with {contractNames[0]} and ending with {contractNames[-1]} took an '
@@ -91,7 +60,7 @@ class YahooOptionsApi:
             if retries == MAX_RETRIES:
                 raise e
             time.sleep(30)
-            return self.getTickerData(contractName, retries+1)
+            return self.getTickerData(contractName, retries + 1)
         data = request.json()
         if request.status_code != 200:
             raise HTTPError(f'Response code:{request.status_code}', request.url, request.reason, contractName)

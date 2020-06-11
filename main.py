@@ -1,6 +1,8 @@
 import logging
 
 import time
+import pickle
+import os
 
 from dataProcessing import optionChainProcessor
 from dataProcessing import contractDataProcessor
@@ -17,8 +19,11 @@ def main():
     logging.info('Starting program')
     startTime = time.time()
     contractNames = (optionChainProcessor.getContractMetaData(NASDAQ, loadNewData=False))
-    contractDataProcessor.getContractPricingData(contractNames)
+    data = contractDataProcessor.getContractPricingData(contractNames)
+    with open('data.p', 'wb') as file:
+        pickle.dump(data, file)
     logging.info(f'Process finished in {time.time() - startTime} seconds')
+    logging.info(f'File data.p generated with file size {os.path.getsize("data.p")}')
 
 
 main()

@@ -4,7 +4,8 @@ from typing import List, Dict
 
 from api.yahooOptionsApi import YahooOptionsApi
 
-CONTRACT_NAME_SIZE = 100
+CONTRACT_NAME_SIZE = 200
+THREADS = 200
 
 
 def chunkList(data: List, chunkSize: int) -> List[List]:
@@ -28,8 +29,10 @@ def queryData(contractNames: List[str]):
 
 
 def getContractPricingData(contractNames: List[Dict[str, str]]):
-    THREADS = 400
     contracts = aggregateAndNormalizeContractNames(contractNames)
     with concurrent.futures.ThreadPoolExecutor(max_workers=THREADS) as executor:
         result = [res for res in executor.map(queryData, contracts)]
-        return result
+        aggregated = []
+        for contractList in result:
+            aggregated.extend(contractList)
+        return aggregated
